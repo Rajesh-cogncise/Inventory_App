@@ -45,7 +45,7 @@ export default function StockPurchasedPage() {
                   <th>Warehouse</th>
                   <th>Products</th>
                   <th>Quantity</th>
-                  <th>Price</th>
+                  <th>Price/unit</th>
                   <th>Total</th>
                 </tr>
               </thead>
