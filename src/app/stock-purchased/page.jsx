@@ -44,6 +44,8 @@ export default function StockPurchasedPage() {
                   <th>Invoice No</th>
                   <th>Warehouse</th>
                   <th>Products</th>
+                  <th>Quantity</th>
+                  <th>Price</th>
                   <th>Total</th>
                 </tr>
               </thead>
@@ -57,11 +59,25 @@ export default function StockPurchasedPage() {
                       {Array.isArray(purchase.products)
                         ? purchase.products.map((p, i) => (
                             <div key={i}>
-                              {p.productId && p.label ? p.label : ''} (Qty: {p.quantity}, Price: {p.price})
+                              {p.productId && p.label ? p.label : ''} 
                             </div>
                           ))
                         : ''}
                     </td>
+                    <td>{Array.isArray(purchase.products)
+                        ? purchase.products.map((p, i) => (
+                            <div key={i}>
+                              {p.quantity}
+                            </div>
+                          ))
+                        : ''}</td>
+                        <td>{Array.isArray(purchase.products)
+                        ? purchase.products.map((p, i) => (
+                            <div key={i}>
+                              {p.price}
+                            </div>
+                          ))
+                        : ''}</td>
                     <td>{purchase.total || ''}</td>
                   </tr>
                 ))}
