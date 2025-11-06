@@ -74,11 +74,11 @@ export default function StockPurchasedPage() {
                         <td>{Array.isArray(purchase.products)
                         ? purchase.products.map((p, i) => (
                             <div key={i}>
-                              {p.price}
+                              ${p.price}
                             </div>
                           ))
                         : ''}</td>
-                    <td>{purchase.total || ''}</td>
+                    <td>${purchase.total || ''}</td>
                   </tr>
                 ))}
               </tbody>
