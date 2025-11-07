@@ -2,6 +2,7 @@ import dbConnect from "@/lib/dbConnect";
 import StockPurchase from "@/models/StockPurchase";
 import WarehouseInventory from "@/models/WarehouseInventory";
 import { NextResponse } from "next/server";
+import "@/models/Supplier";
 import "@/models/Warehouse";
 
 // GET: List all stock purchases
