@@ -70,8 +70,9 @@ export default function StockPurchasedPage() {
                               {p.quantity}
                             </div>
                           ))
-                        : ''}</td>
-                        <td>{Array.isArray(purchase.products)
+                        : ''}
+                      </td>
+                      <td>{Array.isArray(purchase.products)
                         ? purchase.products.map((p, i) => (
                             <div key={i}>
                               ${p.price}

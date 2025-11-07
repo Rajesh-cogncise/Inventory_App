@@ -1,7 +1,7 @@
 "use client";
 import Breadcrumb from "@/components/Breadcrumb";
 import MasterLayout from "@/masterLayout/MasterLayout";
-import React, { useEffect, useState } from "react";
+import React, { useMemo,useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -95,202 +95,199 @@ const WarehouseInventoryPage = () => {
     );
 };
 
+
 function MyTableComponent({ data }) {
-    const [sorting, setSorting] = useState([]);
-    const [globalFilter, setGlobalFilter] = useState(''); // For global search
-    const columns = [
-        {
-            accessorKey: 'warehouseId.name',
-            header: 'Warehouse Name',
-            cell: ({ cell }) => {
-                return cell.getValue();
-            },
-            enableSorting: false,
-        },
-        {
-            header: 'Product(s)',
-            accessorKey: 'products',
-            cell: ({ row }) => {
-                const products = row.original.products;
-                if (!Array.isArray(products) || products.length === 0) return '';
-                return products
-                    .map(p => p.productId && p.productId.name ? p.productId.name : '')
-                    .filter(Boolean)
-                    .join(', ');
-            },
-            enableSorting: false,
-        },
-        {
-            accessorKey: 'currentStock',
-            header: 'Stock',
-            cell: ({ cell }) => {
-                return cell.getValue();
-            },
-            enableSorting: false,
-        },
-        // {
-        //     id: 'actions',
-        //     header: 'Actions',
-        //     cell: ({ row }) => <RowActions job={row.original} />,
-        //     enableSorting: false,
-        //     enableColumnFilter: false,
-        // },
-    ];
-    const table = useReactTable({
-        data,
-        columns,
-        getCoreRowModel: getCoreRowModel(),
-        getPaginationRowModel: getPaginationRowModel(), // Enables client-side pagination
-        getSortedRowModel: getSortedRowModel(),         // Enables client-side sorting
-        getFilteredRowModel: getFilteredRowModel(),     // Enables client-side filtering (search)
+  const [sorting, setSorting] = useState([]);
+  const [globalFilter, setGlobalFilter] = useState('');
 
-        // State management for sorting and filtering
-        state: {
-            sorting,
-            globalFilter,
-        },
-        onSortingChange: setSorting,
-        onGlobalFilterChange: setGlobalFilter,
+  // 1) Flatten inventory => one product per row
+  const flattenedData = useMemo(() => {
+    if (!Array.isArray(data)) return [];
 
-        // Pagination settings (initial state)
-        initialState: {
-            pagination: {
-                pageSize: 10, // Number of rows per page
-                pageIndex: 0,
-            },
-        },
+    return data.flatMap(record => {
+      const warehouseName = record?.warehouseId?.name ?? "N/A";
+      const products = Array.isArray(record?.products) ? record.products : [];
+
+      return products.map(p => ({
+        warehouse: warehouseName,
+        productName: p?.productId?.name ?? "N/A",
+        quantity: p?.quantity ?? 0,        
+        // keep references if needed
+        _inventoryId: record?._id,
+        _productId: p?.productId?._id ?? null,
+      }));
     });
+  }, [data]);
 
-    return (
-        <div className='card'>
-            <div className='card-header'>
-                <h5 className='card-title mb-10'>Warehouse Inventory</h5>
-                <input
-                    type="text"
-                    placeholder="Search all columns..."
-                    value={globalFilter ?? ''}
-                    onChange={e => setGlobalFilter(e.target.value)}
-                    className="form-control"
-                />
-            </div>
+  const totalQuantity = flattenedData.reduce((sum, item) => sum + item.quantity, 0);
+console.log(totalQuantity);
 
-            <div className='card-body'>
-                <div className="table-responsive">
-                    <table className="table basic-border-table mb-0">
-                        <thead>
-                            {table.getHeaderGroups().map(headerGroup => (
-                                <tr key={headerGroup.id}>
-                                    {headerGroup.headers.map(header => (
-                                        <th
-                                            key={header.id}
-                                            colSpan={header.colSpan}
-                                            onClick={header.column.getToggleSortingHandler()} // Click to sort
-                                            className="px-10 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                                        >
-                                            {header.isPlaceholder ? null : (
-                                                <div className="flex items-center">
-                                                    {header.column.columnDef.header}
-                                                    {{
-                                                        asc: ' 🔼',
-                                                        desc: ' 🔽',
-                                                    }[header.column.getIsSorted()] ?? null}
-                                                </div>
-                                            )}
-                                        </th>
-                                    ))}
-                                </tr>
-                            ))}
-                        </thead>
-                        <tbody >
-                            {table.getRowModel().rows.map(row => (
-                                <tr key={row.id}>
-                                    {row.getVisibleCells().map(cell => (
-                                        <td key={cell.id} className="px-10 py-6 whitespace-nowrap text-sm text-gray-900">
-                                            {typeof cell.column.columnDef.cell === 'function'
-                                                ? cell.column.columnDef.cell({ row: cell.row, cell })
-                                                : cell.getValue()}
-                                        </td>
-                                    ))}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+  // 2) Columns — use info.getValue() inside cell
+  const columns = useMemo(() => [
+    {
+      accessorKey: 'warehouse',
+      header: 'Warehouse',
+      cell: info => info.getValue(),     // correct: use the same param name (info)
+    },
+    {
+      accessorKey: 'productName',
+      header: 'Product Name',
+      cell: info => info.getValue(),
+    },
+    {
+      accessorKey: 'quantity',
+      header: 'Quantity',
+      cell: info => info.getValue(),
+    },
+    
+    
+    
+  ], []);
 
-            <div className='card-footer'>
-                <div className="d-flex justify-content-between gap-2 mt-4">
-                    <div className="btn-group radius-8" role="group" aria-label="Default button group">
-                        <button type="button" className="btn btn-primary-600 radius-8 px-20 py-1 d-flex align-items-center gap-2"
-                            onClick={() => table.setPageIndex(0)}
-                            disabled={!table.getCanPreviousPage()}>
-                            <Icon
-                                icon="mage:caret-left-fill"
-                                className="text-xl"
-                            />
-                        </button>
-                        <button type="button" className="btn btn-primary-400 radius-8 px-20 py-1 d-flex align-items-center gap-2"
-                            onClick={() => table.previousPage()}
-                            disabled={!table.getCanPreviousPage()}>
-                            <Icon
-                                icon="mage:caret-left"
-                                className="text-xl"
-                            />
-                        </button>
-                        <button type="button" className="btn btn-primary-400 radius-8 px-20 py-1 d-flex align-items-center gap-2"
-                            onClick={() => table.nextPage()}
-                            disabled={!table.getCanNextPage()}>
-                            <Icon
-                                icon="mage:caret-right"
-                                className="text-xl"
-                            />
-                        </button>
-                        <button type="button" className="btn btn-primary-600 px-20 py-1 radius-8 d-flex align-items-center gap-2"
-                            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-                            disabled={!table.getCanNextPage()}>
-                            <Icon
-                                icon="mage:caret-right-fill"
-                                className="text-xl"
-                            />
-                        </button>
-                    </div>
-                    <span className="d-flex align-items-center gap-1">
-                        Page{' '}
-                        <strong>
-                            {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
-                        </strong>
-                    </span>
-                    <div className="d-flex align-items-center gap-2">
-                        <span className="d-flex align-items-center gap-1">
-                            Go to page:{' '}
-                            <input
-                                type="number"
-                                defaultValue={table.getState().pagination.pageIndex + 1}
-                                onChange={e => {
-                                    const page = e.target.value ? Number(e.target.value) - 1 : 0;
-                                    table.setPageIndex(page);
-                                }}
-                                className="border p-1 rounded w-44-px"
-                            />
-                        </span>
-                        <select
-                            value={table.getState().pagination.pageSize}
-                            onChange={e => {
-                                table.setPageSize(Number(e.target.value));
-                            }}
-                            className="p-1 border rounded"
-                        >
-                            {[10, 20, 30, 40, 50].map(pageSize => (
-                                <option key={pageSize} value={pageSize}>
-                                    Show {pageSize}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-            </div>
+  // 3) Table instance
+  const table = useReactTable({
+    data: flattenedData,
+    columns,
+    state: { sorting, globalFilter },
+    onSortingChange: setSorting,
+    onGlobalFilterChange: setGlobalFilter,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    initialState: { pagination: { pageSize: 10, pageIndex: 0 } },
+  });
+
+  return (
+    <div className='card'>
+      <div className='card-header'>
+        <h5 className='card-title mb-10'>Warehouse Inventory</h5>
+        <input
+          type="text"
+          placeholder="Search all columns..."
+          value={globalFilter ?? ''}
+          onChange={e => setGlobalFilter(e.target.value)}
+          className="form-control"
+        />
+      </div>
+
+      <div className='card-body'>
+        <div className="table-responsive">
+          <table className="table basic-border-table mb-0">
+            <thead>
+              {table.getHeaderGroups().map(headerGroup => (
+                <tr key={headerGroup.id}>
+                  {headerGroup.headers.map(header => (
+                    <th
+                      key={header.id}
+                      colSpan={header.colSpan}
+                      onClick={header.column.getToggleSortingHandler()}
+                      className="px-10 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                    >
+                      {header.isPlaceholder ? null : (
+                        <div className="flex items-center">
+                          {header.column.columnDef.header}
+                          {{
+                            asc: ' 🔼',
+                            desc: ' 🔽',
+                          }[header.column.getIsSorted()] ?? null}
+                        </div>
+                      )}
+                    </th>
+                  ))}
+                </tr>
+              ))}
+            </thead>
+
+            <tbody>
+              {table.getRowModel().rows.length === 0 ? (
+                <tr>
+                  <td colSpan={columns.length} className="text-center py-4">No records found</td>
+                </tr>
+              ) : (
+                table.getRowModel().rows.map(row => (
+                  <tr key={row.id}>
+                    {row.getVisibleCells().map(cell => (
+                      <td key={cell.id} className="px-10 py-6 whitespace-nowrap text-sm text-gray-900">
+                        {cell.getValue()}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              )}
+              <tr className="fw-bold">
+                <td className="text-end" colSpan="2"> Total Stocks</td>
+                <td className="px-10 py-6 whitespace-nowrap text-sm text-gray-900">{totalQuantity}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-    );
+      </div>
+
+      <div className='card-footer'>
+        <div className="d-flex justify-content-between gap-2 mt-4">
+          <div className="btn-group radius-8" role="group" aria-label="Default button group">
+            <button type="button" className="btn btn-primary-600 radius-8 px-20 py-1 d-flex align-items-center gap-2"
+              onClick={() => table.setPageIndex(0)}
+              disabled={!table.getCanPreviousPage()}>
+              <Icon icon="mage:caret-left-fill" className="text-xl" />
+            </button>
+            <button type="button" className="btn btn-primary-400 radius-8 px-20 py-1 d-flex align-items-center gap-2"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}>
+              <Icon icon="mage:caret-left" className="text-xl" />
+            </button>
+            <button type="button" className="btn btn-primary-400 radius-8 px-20 py-1 d-flex align-items-center gap-2"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}>
+              <Icon icon="mage:caret-right" className="text-xl" />
+            </button>
+            <button type="button" className="btn btn-primary-600 px-20 py-1 radius-8 d-flex align-items-center gap-2"
+              onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+              disabled={!table.getCanNextPage()}>
+              <Icon icon="mage:caret-right-fill" className="text-xl" />
+            </button>
+          </div>
+
+          <span className="d-flex align-items-center gap-1">
+            Page{' '}
+            <strong>
+              {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+            </strong>
+          </span>
+
+          <div className="d-flex align-items-center gap-2">
+            <span className="d-flex align-items-center gap-1">
+              Go to page:{' '}
+              <input
+                type="number"
+                defaultValue={table.getState().pagination.pageIndex + 1}
+                onChange={e => {
+                  const page = e.target.value ? Number(e.target.value) - 1 : 0;
+                  table.setPageIndex(page);
+                }}
+                className="border p-1 rounded w-44-px"
+              />
+            </span>
+
+            <select
+              value={table.getState().pagination.pageSize}
+              onChange={e => {
+                table.setPageSize(Number(e.target.value));
+              }}
+              className="p-1 border rounded"
+            >
+              {[10, 20, 30, 40, 50].map(pageSize => (
+                <option key={pageSize} value={pageSize}>
+                  Show {pageSize}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 
