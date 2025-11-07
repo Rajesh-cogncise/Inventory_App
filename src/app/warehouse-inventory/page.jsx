@@ -120,7 +120,7 @@ function MyTableComponent({ data }) {
   }, [data]);
 
   const totalQuantity = flattenedData.reduce((sum, item) => sum + item.quantity, 0);
-console.log(totalQuantity);
+
 
   // 2) Columns — use info.getValue() inside cell
   const columns = useMemo(() => [

@@ -262,13 +262,13 @@ const MasterLayout = ({ children }) => {
                   <Icon icon='lsicon:order-outline' className='menu-icon' />
                   <span>Order Requests</span>
                 </Link>
-              </li>
+              </li>*/}
               <li>
                 <Link href='/suppliers'>
                   <Icon icon='bi:truck' className='menu-icon' />
                   <span>Suppliers</span>
                 </Link>
-              </li> */}
+              </li> 
               {/* <li>
                 <Link href='/reports'>
                   <Icon icon='lsicon:pie-two-outline' className='menu-icon' />

@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 const StockPurchaseSchema = new mongoose.Schema({
-  date: { type: String, required: true },
+  date: { type: Date, required: true },
   invoiceNo: { type: String, required: true },
   products: [
     {
@@ -21,6 +21,11 @@ const StockPurchaseSchema = new mongoose.Schema({
       required: true,
       ref: "Warehouse",
     },
+  supplier: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+    ref: "Supplier",
+  },
 });
 
 export default mongoose.models.StockPurchase || mongoose.model("StockPurchase", StockPurchaseSchema);

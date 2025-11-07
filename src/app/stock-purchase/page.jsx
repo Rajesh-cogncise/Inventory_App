@@ -12,9 +12,11 @@ export default function StockTransfersPage() {
     products: [], // array of { value, label, quantity, variationId }
     total: 0,
     warehouseId: '',
+    supplier: '',
   });
   const [loading, setLoading] = useState(false);
   const [warehouseOptions, setWarehouseOptions] = useState([]);
+  const [supplierOptions, setSuppliersOptions] = useState([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -32,6 +34,22 @@ export default function StockTransfersPage() {
       setLoading(false);
     };
     fetchWarehouses();
+
+    // Fetch Suppliers
+
+    const fetchSuppliers = async () => {
+      try {
+        const res = await fetch('/api/supplier');
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setSuppliersOptions(data.map(w => ({ value: w._id, label: w.name })));
+        }
+      } catch (err) {
+        setSuppliersOptions([]);
+      }
+      setLoading(false);
+    };
+    fetchSuppliers();
   }, []);
 
   const handleSubmit = async (e) => {
@@ -44,6 +62,8 @@ export default function StockTransfersPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
+
+      console.log(form);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to create stock purchase');
       setForm({
@@ -51,6 +71,7 @@ export default function StockTransfersPage() {
         invoiceNo: '',
         products: [],
         total: 0,
+        supplier: '',
         warehouseId: '',
       });
     } catch (err) {
@@ -134,6 +155,32 @@ export default function StockTransfersPage() {
               value={form.invoiceNo}
               onChange={handleChange}
               required
+            />
+          </div>
+          <div className="mb-3">
+            <label className="form-label">From Supplier</label>
+            <Select
+              styles={{
+                control: (baseStyles, state) => ({
+                  ...baseStyles,
+                  background: 'transparent',
+                }),
+                noOptionsMessage: (baseStyles) => ({
+                  ...baseStyles,
+                  color: '#202020',
+                }),
+                option: (baseStyles) => ({
+                  ...baseStyles,
+                  color: '#202020',
+                }),
+              }}
+              options={supplierOptions}
+              value={supplierOptions.find(opt => opt.value === form.supplier) || null}
+              onChange={opt => setForm({ ...form, supplier: opt ? opt.value : '' })}
+              isClearable
+              placeholder="Select from Suppliers..."
+              isDisabled={loading}
+              name="supplier"
             />
           </div>
           <div className="mb-3">

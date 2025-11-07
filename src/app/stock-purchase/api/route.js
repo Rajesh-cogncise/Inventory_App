@@ -7,8 +7,39 @@ import "@/models/Warehouse";
 // GET: List all stock purchases
 export async function GET(req) {
   await dbConnect();
-  const purchases = await StockPurchase.find({}).sort({ createdAt: -1 }).populate('warehouseId');
-  return NextResponse.json(purchases);
+
+  const { searchParams } = new URL(req.url);
+  const supplierId = searchParams.get("supplierId");
+  const warehouseId = searchParams.get("warehouseId");
+  const fromDate = searchParams.get("fromDate"); // YYYY-MM-DD
+  const toDate = searchParams.get("toDate");     // YYYY-MM-DD
+
+  const filter = {};
+
+  if (supplierId) filter.supplier = supplierId;
+  if (warehouseId) filter.warehouseId = warehouseId;
+
+  // Build date filter
+  if (fromDate || toDate) {
+    filter.date = {};
+    if (fromDate) filter.date.$gte = new Date(fromDate);
+    if (toDate) {
+      const to = new Date(toDate);
+      to.setHours(23, 59, 59, 999); // include full day
+      filter.date.$lte = to;
+    }
+  }
+
+  try {
+    const purchases = await StockPurchase.find(filter)
+      .sort({ date: -1 })
+      .populate("warehouseId", "name")
+      .populate("supplier", "name");
+
+    return NextResponse.json(purchases);
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
 }
 
 // POST: Create a new stock transfer and update inventories
@@ -16,6 +47,10 @@ export async function POST(req) {
   await dbConnect();
   const body = await req.json();
   console.log('Received stock purchase:', body);
+
+   // Convert incoming date string to Date object before saving
+  const istDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
+  body.date = new Date(istDate);
   try { 
     
     for (const product of body.products) {
@@ -23,7 +58,7 @@ export async function POST(req) {
       product.productId = product.value;
       delete product.value;
     }
-    
+    console.log(body);
     let sp = await StockPurchase.create(body);
     
 

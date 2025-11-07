@@ -7,10 +7,12 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   let filter = {};
-  if (id) filter._id = id;
+  console.log(id);
+  const suppliers = await Supplier.find({ deleted: 0 });
+  /*if (id) filter._id = id;
   const suppliers = id
-    ? await Supplier.findOne(filter).populate("products")
-    : await Supplier.find(filter).populate("products").sort({ name: 1 });
+  ? await Supplier.findOne(filter)        
+  : await Supplier.find(filter).sort({ name: 1 });*/
   return NextResponse.json(suppliers);
 }
 
@@ -44,7 +46,7 @@ export async function DELETE(req) {
     return NextResponse.json({ error: "Supplier ID required" }, { status: 400 });
   }
   try {
-    await Supplier.findByIdAndDelete(id);
+    await Supplier.findByIdAndUpdate(id, { $set: { deleted: 1 }}, { new: true });
     return NextResponse.json({ success: true });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 400 });

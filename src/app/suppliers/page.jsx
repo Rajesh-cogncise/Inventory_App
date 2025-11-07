@@ -32,6 +32,7 @@ export default function SuppliersPage() {
     try {
       const res = await fetch("/suppliers/api");
       const data = await res.json();
+      console.log(data);
       setSuppliers(Array.isArray(data) ? data : [data]);
     } catch (err) {
       setError("Failed to load suppliers");
@@ -100,14 +101,14 @@ export default function SuppliersPage() {
           <div className="col-md-2">
             <input type="text" name="address" className="form-control" placeholder="Address" value={form.address} onChange={handleChange} />
           </div>
-          <div className="col-md-2">
+          {/*<div className="col-md-2">
             <select name="products" className="form-control" multiple value={form.products} onChange={handleProductSelect}>
               {products.map((p) => (
                 <option key={p._id} value={p._id}>{p.name}</option>
               ))}
             </select>
-          </div>
-          <div className="col-12">
+          </div>*/}
+          <div className="col-12 mb-20">
             <button type="submit" className="btn btn-success">{editingId ? "Update Supplier" : "Create Supplier"}</button>
             {editingId && <button type="button" className="btn btn-secondary ms-2" onClick={() => { setEditingId(null); setForm(initialSupplier); }}>Cancel</button>}
           </div>
@@ -127,7 +128,7 @@ export default function SuppliersPage() {
                   <th>Email</th>
                   <th>Phone</th>
                   <th>Address</th>
-                  <th>Products</th>
+                  {/*<th>Products</th>*/}
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -144,13 +145,13 @@ export default function SuppliersPage() {
                       <td>{s.email}</td>
                       <td>{s.phone}</td>
                       <td>{s.address}</td>
-                      <td>
+                      {/*<td>
                         <ul>
                           {s.products?.map((p) => (
                             <li key={p._id || p}>{p.name || p}</li>
                           ))}
                         </ul>
-                      </td>
+                      </td>*/}
                       <td>
                         <button className="btn btn-sm btn-warning me-2" onClick={() => { setEditingId(s._id); setForm({ ...s, products: s.products?.map(p => p._id || p) }); }}>Edit</button>
                         <button className="btn btn-sm btn-danger" onClick={async () => { await fetch(`/suppliers/api?id=${s._id}`, { method: "DELETE" }); fetchSuppliers(); }}>Delete</button>
