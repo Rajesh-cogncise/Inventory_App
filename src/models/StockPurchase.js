@@ -15,7 +15,7 @@ const StockPurchaseSchema = new mongoose.Schema({
       quantity: { type: Number, required: true },
     }
   ],
-  total: { type: String, default: "" },
+  total: { type: Number, default: "" },
   warehouseId: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
@@ -26,6 +26,8 @@ const StockPurchaseSchema = new mongoose.Schema({
     required: true,
     ref: "Supplier",
   },
+  gst: { type: Number, required: true },
+  subtotal: { type: Number, required: true },
 });
 
 export default mongoose.models.StockPurchase || mongoose.model("StockPurchase", StockPurchaseSchema);

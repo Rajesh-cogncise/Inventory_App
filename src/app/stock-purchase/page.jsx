@@ -10,6 +10,8 @@ export default function StockTransfersPage() {
     date: '',
     invoiceNo: '',
     products: [], // array of { value, label, quantity, variationId }
+    subtotal: 0,
+    gst: 0,
     total: 0,
     warehouseId: '',
     supplier: '',
@@ -70,6 +72,8 @@ export default function StockTransfersPage() {
         date: '',
         invoiceNo: '',
         products: [],
+        subtotal: 0,
+        gst: 0,
         total: 0,
         supplier: '',
         warehouseId: '',
@@ -121,12 +125,16 @@ export default function StockTransfersPage() {
     const updated = form.products.map((p, i) =>
       i === idx ? { ...p, [field]: value } : p
     );
-    const total = updated.reduce((sum, p) => {
+    const subtotal = updated.reduce((sum, p) => {
       const price = parseFloat(p.price) || 0;
-      const quantity = parseInt(p.quantity) || 0;
-      return sum + (price * quantity);
+      const qty = parseInt(p.quantity) || 0;
+      return sum + price * qty;
     }, 0);
-    setForm({ ...form, products: updated, total: total });
+
+    const gst = Number((subtotal * 0.10).toFixed(3)); // Round GST to 3 decimals
+    const total = Number((subtotal + gst).toFixed(3)); // Round total also to 3 decimals
+
+    setForm({ ...form, products: updated, subtotal, gst, total });
   };
 
   return (
@@ -277,16 +285,17 @@ export default function StockTransfersPage() {
               </table>
             </div>
           )}
-          <div className="mb-3">
-            <label className="form-label">Total Cost</label>
-            <input
-              type="number"
-              name="totalCost"
-              className="form-control"
-              value={form.total}
-              readOnly
-            />
+          <div className=" d-flex gap-4 mt-5 mb-3">
+            <label className="form-label fw-bold text-md">Subtotal : ${form.subtotal}</label>
+            <input type="hidden" className="form-control" value={form.subtotal} readOnly />
+            <br/>
+            <label className="form-label fw-bold text-md">GST (10%): ${form.gst}</label>
+            <input type="hidden" className="form-control" value={form.gst} readOnly />
+            <br/>
+            <label className="form-label fw-bold text-md">Total Amount: ${form.total}</label>
+            <input type="hidden" className="form-control" value={form.total} readOnly />
           </div>
+
           <div className=" d-flex gap-2">
             <button type="submit" className="btn btn-primary" disabled={loading}>
               Purchase
