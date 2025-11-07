@@ -189,21 +189,81 @@ export default function StockPurchasedPage() {
                     <td>{purchase.invoiceNo}</td>
                     <td>{purchase.supplier?.name || ""}</td>
                     <td>{purchase.warehouseId?.name || ""}</td>
-                    <td>
-                      {Array.isArray(purchase.products)
-                        ? purchase.products.map((p, i) => <div key={i}>{p.label || (p.productId && p.productId.name) || ""}</div>)
-                        : ""}
+                    <td style={{ padding: "10px" }}>
+                    {Array.isArray(purchase.products) && purchase.products.length > 0 ? (
+                      <ul style={{
+                        listStyle: "none",
+                        margin: 0,
+                      }}>
+                        {purchase.products.map((p, i) => (
+                          <li 
+                            key={i} 
+                            style={{
+                              padding: "4px 6px",
+                              borderBottom: "1px solid #c1bcbc",
+                            }}
+                          >
+                            {p.label || (p.productId?.name) || "Unnamed Product"}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <span style={{ color: "#999" }}>No products</span>
+                    )}
+                  </td>
+
+                    <td style={{ padding: "10px" }}>
+                      {Array.isArray(purchase.products) && purchase.products.length > 0 ? (
+                        <ul
+                          style={{
+                            listStyle: "none",
+                            margin: 0,
+                            padding: 0,
+                          }}
+                        >
+                          {purchase.products.map((p, i) => (
+                            <li
+                              key={i}
+                              style={{
+                                padding: "4px 6px",
+                                borderBottom: "1px solid #c1bcbc",
+                              }}
+                            >
+                              {p.quantity}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <span style={{ color: "#999" }}>No Data</span>
+                      )}
                     </td>
-                    <td>
-                      {Array.isArray(purchase.products)
-                        ? purchase.products.map((p, i) => <div key={i}>{p.quantity}</div>)
-                        : ""}
+
+                    <td style={{ padding: "10px" }}>
+                      {Array.isArray(purchase.products) && purchase.products.length > 0 ? (
+                        <ul
+                          style={{
+                            listStyle: "none",
+                            margin: 0,
+                            padding: 0,
+                          }}
+                        >
+                          {purchase.products.map((p, i) => (
+                            <li
+                              key={i}
+                              style={{
+                                padding: "4px 6px",
+                                borderBottom: "1px solid #c1bcbc",
+                              }}
+                            >
+                              ${p.price}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <span style={{ color: "#999" }}>No Data</span>
+                      )}
                     </td>
-                    <td>
-                      {Array.isArray(purchase.products)
-                        ? purchase.products.map((p, i) => <div key={i}>${p.price}</div>)
-                        : ""}
-                    </td>
+
                     <td>${purchase.total || ""}</td>
                   </tr>
                 ))}
