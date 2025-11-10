@@ -263,7 +263,7 @@ export default function StockPurchasedPage() {
                       <table className="table table-sm table-bordered">
                         <thead>
                           <tr>
-                            <th>#</th>
+                            <th >Sr.No</th>
                             <th>Product</th>
                             <th>Quantity</th>
                             <th>Price / unit</th>
@@ -276,7 +276,7 @@ export default function StockPurchasedPage() {
                               const lineTotal = getLineTotal(p.price, p.quantity);
                               return (
                                 <tr key={i}>
-                                  <td>{i + 1}</td>
+                                  <td className="text-center">{i + 1}</td>
                                   <td>{p.label || p.productId?.name || "Unnamed Product"}</td>
                                   <td>{p.quantity}</td>
                                   <td>${formatDecimal(p.price)}</td>
