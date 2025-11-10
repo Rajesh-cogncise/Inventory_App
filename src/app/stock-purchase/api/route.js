@@ -4,6 +4,10 @@ import WarehouseInventory from "@/models/WarehouseInventory";
 import { NextResponse } from "next/server";
 import "@/models/Supplier";
 import "@/models/Warehouse";
+import "@/models/User";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+
 
 // GET: List all stock purchases
 export async function GET(req) {
@@ -35,7 +39,8 @@ export async function GET(req) {
     const purchases = await StockPurchase.find(filter)
       .sort({ date: -1 })
       .populate("warehouseId", "name")
-      .populate("supplier", "name");
+      .populate("supplier", "name")
+      .populate('userId', 'name');
 
     return NextResponse.json(purchases);
   } catch (err) {
@@ -48,7 +53,13 @@ export async function POST(req) {
   await dbConnect();
   const body = await req.json();
   console.log('Received stock purchase:', body);
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
+  // ✅ attach logged-in user id
+  body.userId = session.user.id;
    // Convert incoming date string to Date object before saving
   const istDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
   body.date = new Date(istDate);
