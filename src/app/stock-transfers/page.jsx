@@ -1,138 +1,302 @@
 "use client";
 import Breadcrumb from "@/components/Breadcrumb";
-import React, { useEffect, useState } from "react";
 import MasterLayout from "@/masterLayout/MasterLayout";
+import React, { useEffect, useState, useMemo } from "react";
 import { Icon } from "@iconify/react";
 
 const initialForm = {
   fromWarehouseId: "",
   toWarehouseId: "",
   productId: "",
-  variationId: "",
   quantity: 0,
   reason: "",
 };
 
 export default function StockTransfersPage() {
-  const [transfers, setTransfers] = useState([]);
   const [form, setForm] = useState(initialForm);
-  const [loading, setLoading] = useState(true);
+  const [warehouses, setWarehouses] = useState([]);
+  const [productsForFromWarehouse, setProductsForFromWarehouse] = useState([]); // { value, label, available }
+  const [loadingProducts, setLoadingProducts] = useState(false);
   const [error, setError] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
-  const [editingId, setEditingId] = useState(null);
+
+  const [transfers, setTransfers] = useState([]); // history
+  // pagination for transfers (client-side)
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
-    fetchTransfers();
+    loadWarehouses();
+    loadTransfers();
   }, []);
 
-  const fetchTransfers = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch("/stock-transfers/api");
-      const data = await res.json();
-      setTransfers(data);
-    } catch (err) {
-      setError("Failed to load transfers");
+  const groupedProducts = Object.values(
+    productsForFromWarehouse.reduce((acc, p) => {
+      if (!acc[p.productId]) {
+        acc[p.productId] = { ...p };
+      } else {
+        acc[p.productId].available += p.available;
+      }
+      return acc;
+    }, {})
+  );
+
+  useEffect(() => {
+    // when fromWarehouse changes, fetch inventory for that warehouse
+    if (form.fromWarehouseId) {
+      loadProductsForWarehouse(form.fromWarehouseId);
+    } else {
+      setProductsForFromWarehouse([]);
+      setForm(prev => ({ ...prev, productId: "" }));
     }
-    setLoading(false);
+  }, [form.fromWarehouseId]);
+
+  async function loadWarehouses() {
+    try {
+      const res = await fetch("/warehouses/api");
+      const data = await res.json();
+      setWarehouses(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setWarehouses([]);
+    }
+  }
+
+  async function loadProductsForWarehouse(warehouseId) {
+    setLoadingProducts(true);
+    setProductsForFromWarehouse([]);
+    try {
+      // use your existing warehouse-inventory API
+      const res = await fetch(`/warehouse-inventory/api?warehouseId=${warehouseId}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setProductsForFromWarehouse([]);
+      } else {
+        // 'data' is an array of WarehouseInventory records (should be length 1 for that warehouse)
+        // flatten products
+        const flattened = (Array.isArray(data) ? data : []).flatMap(record => {
+          const products = Array.isArray(record.products) ? record.products : [];
+          return products.map(p => ({
+            value: p.productId?._id || p.productId,
+            label: p.productId?.name || p.label || "Unnamed",
+            available: Number(p.quantity || 0),
+            raw: p
+          }));
+        });
+        setProductsForFromWarehouse(flattened);
+      }
+    } catch (err) {
+      setProductsForFromWarehouse([]);
+    } finally {
+      setLoadingProducts(false);
+    }
+  }
+
+  async function loadTransfers() {
+    try {
+      const res = await fetch(`/stock-transfers/api/stock-transfers/`);
+      const data = await res.json();
+      setTransfers(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setTransfers([]);
+    }
+  }
+  
+  const handleChange = e => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
+  const selectedProduct = useMemo(() => productsForFromWarehouse.find(p => p.value === form.productId) || null, [productsForFromWarehouse, form.productId]);
+
+  const availableQty = selectedProduct ? selectedProduct.available : 0;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+    // validate fields
+    if (!form.fromWarehouseId || !form.toWarehouseId || !form.productId) {
+      setError("Please select from warehouse, to warehouse and product.");
+      return;
+    }
+    const qty = Number(form.quantity || 0);
+    if (!qty || qty <= 0) {
+      setError("Enter a valid quantity.");
+      return;
+    }
+    // Block if insufficient
+    if (qty > availableQty) {
+      setError(`Insufficient stock in source warehouse. Available: ${availableQty}`);
+      return;
+    }
+
     setSubmitLoading(true);
-    setError("");
     try {
-      const method = editingId ? "PUT" : "POST";
-      const url = editingId ? `/stock-transfers/api?id=${editingId}` : "/stock-transfers/api";
-      const res = await fetch(url, {
-        method,
+      const res = await fetch("/stock-transfers/api/stock-transfers/", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          fromWarehouseId: form.fromWarehouseId,
+          toWarehouseId: form.toWarehouseId,
+          productId: form.productId,
+          quantity: qty,
+          reason: form.reason
+        })
       });
-      if (!res.ok) throw new Error("Failed to save transfer");
-      await fetchTransfers();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Transfer failed");
+      // success
       setForm(initialForm);
-      setEditingId(null);
+      setProductsForFromWarehouse([]);
+      await loadProductsForWarehouse(""); // clear
+      await loadTransfers();
     } catch (err) {
-      setError(err.message || "Error saving transfer");
-    }
-    setSubmitLoading(false);
-  };
-
-  const handleEdit = (item) => {
-    setEditingId(item._id);
-    setForm({
-      fromWarehouseId: item.fromWarehouseId,
-      toWarehouseId: item.toWarehouseId,
-      productId: item.productId,
-      variationId: item.variationId,
-      quantity: item.quantity,
-      reason: item.reason,
-    });
-  };
-
-  const handleDelete = async (item) => {
-    if (!window.confirm("Delete this transfer?")) return;
-    setError("");
-    try {
-      const res = await fetch(`/stock-transfers/api?id=${item._id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete transfer");
-      await fetchTransfers();
-    } catch (err) {
-      setError("Failed to delete transfer");
+      setError(err.message || "Failed to create transfer");
+    } finally {
+      setSubmitLoading(false);
     }
   };
+
+  // filtered & paginated transfers
+  const filteredTransfers = transfers.filter(t => {
+    if (!search) return true;
+    const s = search.toLowerCase();
+    return (t.productLabel || t.reason || t.fromWarehouseId?.name || t.toWarehouseId?.name || "")
+      .toString().toLowerCase().includes(s);
+  });
+
+  const pageCount = Math.ceil(filteredTransfers.length / pageSize) || 1;
+  const visibleTransfers = filteredTransfers.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
 
   return (
     <MasterLayout>
-        <Breadcrumb title='Stock Transfers' />
+      <Breadcrumb title="Stock Transfers" />
       <div className="container py-4">
         {error && <div className="alert alert-danger mb-3">{error}</div>}
-        {/* <form className="row g-3 mb-4" onSubmit={handleSubmit}>
-          <div className="col-md-2">
-            <input type="text" name="fromWarehouseId" className="form-control" placeholder="From Warehouse ID" value={form.fromWarehouseId} onChange={handleChange} required />
+
+        <form className="row g-3 mb-4" onSubmit={handleSubmit}>
+          <div className="col-md-3">
+            <label className="form-label">From Warehouse</label>
+            <select name="fromWarehouseId" className="form-control" value={form.fromWarehouseId} onChange={handleChange} required>
+              <option value="">Select from warehouse</option>
+              {warehouses.map(w => <option key={w._id} value={w._id}>{w.name}</option>)}
+            </select>
           </div>
-          <div className="col-md-2">
-            <input type="text" name="toWarehouseId" className="form-control" placeholder="To Warehouse ID" value={form.toWarehouseId} onChange={handleChange} required />
+
+          <div className="col-md-3">
+            <label className="form-label">To Warehouse</label>
+            <select name="toWarehouseId" className="form-control" value={form.toWarehouseId} onChange={handleChange} required>
+              <option value="">Select to warehouse</option>
+              {warehouses.map(w => <option key={w._id} value={w._id}>{w.name}</option>)}
+            </select>
           </div>
-          <div className="col-md-2">
-            <input type="text" name="productId" className="form-control" placeholder="Product ID" value={form.productId} onChange={handleChange} required />
+
+          <div className="col-md-3">
+            <label className="form-label">Product (from selected warehouse)</label>
+            <select
+              name="productId"
+              className="form-control"
+              value={form.productId}
+              onChange={handleChange}
+              required
+            >
+              <option value="">{loadingProducts ? "Loading..." : "Select product"}</option>
+              {productsForFromWarehouse.map((p, index) => (
+                  <option key={`${p.value}-${index}`} value={p.value}>
+                    {p.label} {p.available != null ? ` (Available: ${p.available})` : ""}
+                  </option>
+              ))}
+            </select>
           </div>
-          <div className="col-md-2">
-            <input type="text" name="variationId" className="form-control" placeholder="Variation ID" value={form.variationId} onChange={handleChange} required />
-          </div>
-          <div className="col-md-2">
-            <input type="number" name="quantity" className="form-control" placeholder="Quantity" value={form.quantity} onChange={handleChange} required />
-          </div>
+
           <div className="col-md-1">
-            <input type="text" name="reason" className="form-control" placeholder="Reason" value={form.reason} onChange={handleChange} />
+            <label className="form-label">Available</label>
+            <input type="text" className="form-control" value={availableQty} readOnly />
           </div>
-          <div className="col-md-1 d-flex gap-2">
+
+          <div className="col-md-1">
+            <label className="form-label">Qty</label>
+            <input type="number" name="quantity" className="form-control" value={form.quantity} min={1} onChange={handleChange} required />
+          </div>
+
+          <div className="col-md-1">
+            <label className="form-label">Reason</label>
+            <input type="text" name="reason" className="form-control" value={form.reason} onChange={handleChange} placeholder="Optional" />
+          </div>
+
+          <div className="col-md-12 d-flex gap-2 mt-2">
             <button type="submit" className="btn btn-success" disabled={submitLoading}>
-              {editingId ? "Update" : "Add"}
+              {submitLoading ? "Transferring..." : "Transfer"}
             </button>
-            {editingId && (
-              <button type="button" className="btn btn-secondary" onClick={() => { setEditingId(null); setForm(initialForm); }}>
-                Cancel
-              </button>
-            )}
+            <button type="button" className="btn btn-outline-secondary" onClick={() => { setForm(initialForm); setError(""); }}>
+              Reset
+            </button>
           </div>
-        </form> */}
-        {loading ? (
-          <div className="text-center py-5">
-            <Icon icon="eos-icons:loading" className="icon text-3xl" /> Loading...
+        </form>
+
+        {/* --- Transfer history --- */}
+        <div className="card">
+          <div className="card-header d-flex align-items-center justify-content-between">
+            <div>
+              <h5 className="card-title mb-0">Transfer History</h5>
+            </div>
+            <div className="d-flex align-items-center gap-2">
+              <input type="text" placeholder="Search..." className="form-control" style={{width: 220}} value={search} onChange={e => { setSearch(e.target.value); setPageIndex(0); }} />
+              <select className="form-control" style={{width: 120}} value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPageIndex(0); }}>
+                {[5,10,20,50].map(n => <option key={n} value={n}>Show {n}</option>)}
+              </select>
+            </div>
           </div>
-        ) : (
-          <div className="text-center py-5">
-            <Icon icon="eos-icons:loading" className="icon text-3xl" /> Coming Soon...
+
+          <div className="card-body">
+            <div className="table-responsive">
+              <table className="table basic-border-table mb-0">
+                <thead>
+                  <tr>
+                    <th>Sr.</th>
+                    <th>Date</th>
+                    <th>Product</th>
+                    <th>Qty</th>
+                    <th>From</th>
+                    <th>To</th>
+                    <th>Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleTransfers.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="text-center py-4">No transfers found</td>
+                    </tr>
+                  ) : visibleTransfers.map((t, i) => (
+                    <tr key={t._id || i}>
+                      <td>{pageIndex * pageSize + i + 1}</td>
+                      <td>{t.createdAt ? new Date(t.createdAt).toLocaleString() : ""}</td>
+                      <td>{t.productLabel || t.productId?.name || (t.productId?._id ? t.productId._id : "")}</td>
+                      <td>{t.quantity}</td>
+                      <td>{t.fromWarehouseId?.name ?? "N/A"}</td>
+                      <td>{t.toWarehouseId?.name ?? "N/A"}</td>
+                      <td>{t.reason || ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* pagination controls */}
+            <div className="d-flex justify-content-between align-items-center mt-3">
+              <div className="btn-group">
+                <button className="btn btn-outline-primary" onClick={() => setPageIndex(0)} disabled={pageIndex === 0}>First</button>
+                <button className="btn btn-outline-primary" onClick={() => setPageIndex(p => Math.max(0, p-1))} disabled={pageIndex === 0}>Prev</button>
+                <button className="btn btn-outline-primary" onClick={() => setPageIndex(p => Math.min(pageCount-1, p+1))} disabled={pageIndex >= pageCount-1}>Next</button>
+                <button className="btn btn-outline-primary" onClick={() => setPageIndex(pageCount-1)} disabled={pageIndex >= pageCount-1}>Last</button>
+              </div>
+
+              <div>
+                Page {pageIndex + 1} of {pageCount}
+              </div>
+            </div>
           </div>
-        )}
+        </div>
       </div>
     </MasterLayout>
   );

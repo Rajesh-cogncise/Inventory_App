@@ -16,7 +16,7 @@ export async function DELETE(req) {
     return NextResponse.json({ error: 'Product ID required' }, { status: 400 });
   }
   try {
-    await Product.findByIdAndDelete(id);
+    await Product.findByIdAndUpdate(id, { isActive: false });
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
@@ -28,7 +28,7 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get('id');
   if (!id) {
-    const products = await Product.find({});
+    const products = await Product.find({isActive: true});
     return NextResponse.json(products);
   }
   try {

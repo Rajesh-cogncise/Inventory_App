@@ -5,23 +5,23 @@ import WarehouseInventory from "../../../models/WarehouseInventory";
 
 export async function GET(req) {
   await dbConnect();
+
   const { searchParams } = new URL(req.url);
   const warehouseId = searchParams.get("warehouseId");
-  // const productId = searchParams.get("productId");
-  // const variationId = searchParams.get("variationId");
 
-  // let filter = {};
-  // if (warehouseId) filter.warehouseId = warehouseId;
-  // if (productId) filter.productId = productId;
-  // if (variationId) filter.variationId = variationId;
+  const filter = {};
+  if (warehouseId) {
+    filter.warehouseId = warehouseId; // Apply filter only if provided
+  }
 
-  const inventory = await WarehouseInventory.find({warehouseId})
+  const inventory = await WarehouseInventory.find(filter)
     .sort({ lastUpdated: -1 })
-    .populate('warehouseId')
-    .populate('products.productId');
-    console.log(inventory);
+    .populate('warehouseId', 'name location')     // Optional: specify fields
+    .populate('products.productId', 'name type ');  // Optional: specify fields
+
   return Response.json(inventory);
 }
+
 
 export async function POST(req) {
   await dbConnect();

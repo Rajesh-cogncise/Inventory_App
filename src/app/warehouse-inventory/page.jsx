@@ -1,156 +1,131 @@
+// app/(your-route)/warehouse-inventory-page.jsx
 "use client";
 import Breadcrumb from "@/components/Breadcrumb";
 import MasterLayout from "@/masterLayout/MasterLayout";
-import React, { useMemo,useEffect, useState } from "react";
+import React, { useMemo, useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
-import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { useReactTable, getCoreRowModel, getPaginationRowModel, getSortedRowModel, getFilteredRowModel, createColumnHelper } from '@tanstack/react-table';
+import { useReactTable, getCoreRowModel, getPaginationRowModel, getSortedRowModel, getFilteredRowModel } from '@tanstack/react-table';
+import { flexRender } from "@tanstack/react-table";
 
+function formatDecimal3(val) {
+  if (val === null || val === undefined) return "0.000";
+  if (typeof val === "object" && (val.$numberDecimal || val.toString)) {
+    const s = val.$numberDecimal ? val.$numberDecimal : val.toString();
+    return Number(s).toFixed(3);
+  }
+  return Number(val).toFixed(3);
+}
 
-const WarehouseInventoryPage = () => {
+export default function WarehouseInventoryPage() {
+  const [inventory, setInventory] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [selectedWarehouse, setSelectedWarehouse] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
-    const [inventory, setInventory] = useState([]);
-    const [warehouses, setWarehouses] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
-    const [selectedWarehouse, setSelectedWarehouse] = useState(null);
+  // modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalRows, setModalRows] = useState([]); // invoices returned by API
+  const [modalProductName, setModalProductName] = useState("");
+  const [modalWarehouseName, setModalWarehouseName] = useState("");
 
-    useEffect(() => {
-        // fetchInventory();
-        fetchWarehouses();
-    }, []);
+  useEffect(() => {
+    fetchWarehouses();
+    fetchInventory();
+  }, []);
 
-    const fetchInventory = async (w) => {
-        w.preventDefault();
-        setLoading(true);
-        setError("");
-        try {
-            let url = "/warehouse-inventory/api";
-            if (selectedWarehouse) {
-                url += `?warehouseId=${selectedWarehouse}`;
-            }
-            const res = await fetch(url);
-            const data = await res.json();
-            console.log(data)
-            setInventory(data);
-        } catch (err) {
-            setError("Error fetching inventory");
-            setInventory([]);
-        }
-        setLoading(false);
+  async function fetchWarehouses() {
+    try {
+      const res = await fetch("/warehouses/api");
+      const data = await res.json();
+      setWarehouses(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setWarehouses([]);
     }
+  }
 
+  async function fetchInventory(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      const params = new URLSearchParams();
+      if (selectedWarehouse) params.append("warehouseId", selectedWarehouse);
+      if (fromDate) params.append("fromDate", fromDate);
+      if (toDate) params.append("toDate", toDate);
+      const url = params.toString() ? `/warehouse-inventory/api?${params.toString()}` : `/warehouse-inventory/api`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data?.error || "Error fetching inventory");
+        setInventory([]);
+      } else {
+        setInventory(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      setError("Error fetching inventory");
+      setInventory([]);
+    } finally {
+      setLoading(false);
+    }
+  }
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setSelectedWarehouse(value);
-    };
-
-    const fetchWarehouses = async () => {
-        try {
-            const res = await fetch("/warehouses/api");
-            const data = await res.json();
-            setWarehouses(data);
-        } catch (err) {
-            setWarehouses([]);
-        }
-    };
-    
-    return (
-        <MasterLayout>
-            <Breadcrumb title='Warehouses Inventory' />
-            <div className="container py-4">
-                <div className="d-flex align-items-center gap-10 mb-10">
-                    <Link href="/warehouses" className="btn btn-primary d-flex align-items-center">
-                        <Icon icon="mage:home-3" className="me-2" /> All Warehouses
-                    </Link>
-                    <form onSubmit={fetchInventory} className="d-flex align-items-center gap-10">
-                        <select
-                            name="warehouseId"
-                            className="form-control"
-                            onChange={handleChange}
-                            required
-                        >
-                            <option value="">Select Warehouse</option>
-                            {warehouses.map((w) => (
-                                <option key={w._id} value={w._id}>
-                                    {w.name} {w.location ? `(${w.location})` : ""}
-                                </option>
-                            ))}
-                        </select>
-                        <button type="submit" className="btn btn-primary ms-2">Show</button>
-                    </form>
-                </div>
-                {error && <div className="alert alert-danger mb-3">{error}</div>}
-                {loading ? (
-                    <div className="text-center py-5">
-                        <Icon icon="eos-icons:loading" className="icon text-3xl" /> Loading...
-                    </div>
-                ) : (
-                    <MyTableComponent data={inventory} />
-                )}
-            </div>
-        </MasterLayout>
-    );
-};
-
-
-function MyTableComponent({ data }) {
-  const [sorting, setSorting] = useState([]);
-  const [globalFilter, setGlobalFilter] = useState('');
-
-  // 1) Flatten inventory => one product per row
+  // Flat rows (one row per product)
   const flattenedData = useMemo(() => {
-    if (!Array.isArray(data)) return [];
-
-    return data.flatMap(record => {
+    if (!Array.isArray(inventory)) return [];
+    return inventory.flatMap(record => {
       const warehouseName = record?.warehouseId?.name ?? "N/A";
+      const warehouseId = record?.warehouseId?._id ?? record?.warehouseId;
       const products = Array.isArray(record?.products) ? record.products : [];
 
       return products.map(p => ({
-        warehouse: warehouseName,
-        productName: p?.productId?.name ?? "N/A",
-        quantity: p?.quantity ?? 0,        
-        // keep references if needed
         _inventoryId: record?._id,
-        _productId: p?.productId?._id ?? null,
+        warehouseId,
+        warehouse: warehouseName,
+        productName: p?.productId?.name ?? p?.label ?? "N/A",
+        productLabel: p?.label ?? "",
+        productId: p?.productId?._id ?? p?.productId,
+        type: p?.productId?.type || "N/A",
+        quantity: p?.quantity ?? 0,
+        
       }));
     });
-  }, [data]);
+  }, [inventory]);
 
-  const totalQuantity = flattenedData.reduce((sum, item) => sum + item.quantity, 0);
+  const totalQuantity = flattenedData.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
 
+  // columns for table
+  const columns = React.useMemo(() => [
+    { header: "Sr. No", accessorFn: (_, i) => i + 1, id: "srNo" },
+    { accessorKey: 'warehouse', header: 'Warehouse' },
+    { accessorKey: 'productName', header: 'Product Name' },
+    { accessorKey: 'type', header: 'Product Type' },
+    { accessorKey: 'quantity', header: 'Quantity' },
+    {
+      id: "p_actions",
+      header: "Purchases Done",
+      cell: ({ row }) => {
+        const r = row.original;
+        return (
+          <button
+            className="btn btn-sm btn-outline-primary"
+            onClick={() => openProductModal(r)}
+          >
+            View Purchase
+          </button>
+        );
+        }
+      }
 
-  // 2) Columns — use info.getValue() inside cell
-  const columns = useMemo(() => [
-    {
-      accessorKey: 'warehouse',
-      header: 'Warehouse',
-      cell: info => info.getValue(),     // correct: use the same param name (info)
-    },
-    {
-      accessorKey: 'productName',
-      header: 'Product Name',
-      cell: info => info.getValue(),
-    },
-    {
-      accessorKey: 'quantity',
-      header: 'Quantity',
-      cell: info => info.getValue(),
-    },
-    
-    
-    
   ], []);
 
-  // 3) Table instance
   const table = useReactTable({
     data: flattenedData,
     columns,
-    state: { sorting, globalFilter },
-    onSortingChange: setSorting,
-    onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -158,137 +133,239 @@ function MyTableComponent({ data }) {
     initialState: { pagination: { pageSize: 10, pageIndex: 0 } },
   });
 
+  // OPEN modal -> fetch invoices for product + warehouse
+  async function openProductModal(row) {
+    const pid = row.productId;
+    const wid = row.warehouseId;
+    setModalProductName(row.productName || row.productLabel || "Product");
+    setModalWarehouseName(row.warehouse || "");
+    setModalOpen(true);
+    setModalLoading(true);
+    setModalRows([]);
+
+    try {
+      const params = new URLSearchParams({ productId: pid, warehouseId: wid });
+      const res = await fetch(`/warehouse-inventory/api/purchases-by-product?${params.toString()}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setModalRows([]);
+        setError(data.error || "Failed to fetch purchases for product");
+      } else {
+        setModalRows(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      setModalRows([]);
+      setError("Failed to fetch purchases for product");
+    } finally {
+      setModalLoading(false);
+    }
+  }
+
+  function closeModal() {
+    setModalOpen(false);
+    setModalRows([]);
+  }
+
   return (
-    <div className='card'>
-      <div className='card-header'>
-        <h5 className='card-title mb-10'>Warehouse Inventory</h5>
-        <input
-          type="text"
-          placeholder="Search all columns..."
-          value={globalFilter ?? ''}
-          onChange={e => setGlobalFilter(e.target.value)}
-          className="form-control"
-        />
-      </div>
+    <MasterLayout>
+      <Breadcrumb title='Warehouses Inventory' />
+      <div className="container py-4">
+        <div className="d-flex align-items-center gap-10 mb-10">
+          <Link href="/warehouses" className="btn btn-primary d-flex align-items-center">
+            <Icon icon="mage:home-3" className="me-2" /> All Warehouses
+          </Link>
 
-      <div className='card-body'>
-        <div className="table-responsive">
-          <table className="table basic-border-table mb-0">
-            <thead>
-              {table.getHeaderGroups().map(headerGroup => (
-                <tr key={headerGroup.id}>
-                  {headerGroup.headers.map(header => (
-                    <th
-                      key={header.id}
-                      colSpan={header.colSpan}
-                      onClick={header.column.getToggleSortingHandler()}
-                      className="px-10 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                    >
-                      {header.isPlaceholder ? null : (
-                        <div className="flex items-center">
-                          {header.column.columnDef.header}
-                          {{
-                            asc: ' 🔼',
-                            desc: ' 🔽',
-                          }[header.column.getIsSorted()] ?? null}
-                        </div>
-                      )}
-                    </th>
-                  ))}
-                </tr>
-              ))}
-            </thead>
-
-            <tbody>
-              {table.getRowModel().rows.length === 0 ? (
-                <tr>
-                  <td colSpan={columns.length} className="text-center py-4">No records found</td>
-                </tr>
-              ) : (
-                table.getRowModel().rows.map(row => (
-                  <tr key={row.id}>
-                    {row.getVisibleCells().map(cell => (
-                      <td key={cell.id} className="px-10 py-6 whitespace-nowrap text-sm text-gray-900">
-                        {cell.getValue()}
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              )}
-              <tr className="fw-bold">
-                <td className="text-end" colSpan="2"> Total Stocks</td>
-                <td className="px-10 py-6 whitespace-nowrap text-sm text-gray-900">{totalQuantity}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className='card-footer'>
-        <div className="d-flex justify-content-between gap-2 mt-4">
-          <div className="btn-group radius-8" role="group" aria-label="Default button group">
-            <button type="button" className="btn btn-primary-600 radius-8 px-20 py-1 d-flex align-items-center gap-2"
-              onClick={() => table.setPageIndex(0)}
-              disabled={!table.getCanPreviousPage()}>
-              <Icon icon="mage:caret-left-fill" className="text-xl" />
-            </button>
-            <button type="button" className="btn btn-primary-400 radius-8 px-20 py-1 d-flex align-items-center gap-2"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}>
-              <Icon icon="mage:caret-left" className="text-xl" />
-            </button>
-            <button type="button" className="btn btn-primary-400 radius-8 px-20 py-1 d-flex align-items-center gap-2"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}>
-              <Icon icon="mage:caret-right" className="text-xl" />
-            </button>
-            <button type="button" className="btn btn-primary-600 px-20 py-1 radius-8 d-flex align-items-center gap-2"
-              onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-              disabled={!table.getCanNextPage()}>
-              <Icon icon="mage:caret-right-fill" className="text-xl" />
-            </button>
-          </div>
-
-          <span className="d-flex align-items-center gap-1">
-            Page{' '}
-            <strong>
-              {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
-            </strong>
-          </span>
-
-          <div className="d-flex align-items-center gap-2">
-            <span className="d-flex align-items-center gap-1">
-              Go to page:{' '}
-              <input
-                type="number"
-                defaultValue={table.getState().pagination.pageIndex + 1}
-                onChange={e => {
-                  const page = e.target.value ? Number(e.target.value) - 1 : 0;
-                  table.setPageIndex(page);
-                }}
-                className="border p-1 rounded w-44-px"
-              />
-            </span>
-
-            <select
-              value={table.getState().pagination.pageSize}
-              onChange={e => {
-                table.setPageSize(Number(e.target.value));
-              }}
-              className="p-1 border rounded"
-            >
-              {[10, 20, 30, 40, 50].map(pageSize => (
-                <option key={pageSize} value={pageSize}>
-                  Show {pageSize}
-                </option>
-              ))}
+          <form onSubmit={fetchInventory} className="d-flex align-items-center gap-2">
+            <select name="warehouseId" className="form-control" onChange={e => setSelectedWarehouse(e.target.value)} value={selectedWarehouse}>
+              <option value="">All Warehouses</option>
+              {warehouses.map(w => <option key={w._id} value={w._id}>{w.name}{w.location ? ` (${w.location})` : ""}</option>)}
             </select>
-          </div>
+
+            <input type="date" className="form-control" value={fromDate} onChange={e => setFromDate(e.target.value)} />
+            <input type="date" className="form-control" value={toDate} onChange={e => setToDate(e.target.value)} />
+            <button type="submit" className="btn btn-primary ms-2">Search</button>
+            <button type="button" className="btn btn-outline-secondary ms-1" onClick={() => { setSelectedWarehouse(""); setFromDate(""); setToDate(""); fetchInventory(); }}>Reset</button>
+          </form>
         </div>
+
+        {error && <div className="alert alert-danger mb-3">{error}</div>}
+
+        {loading ? (
+          <div className="text-center py-5"><Icon icon="eos-icons:loading" className="icon text-3xl" /> Loading...</div>
+        ) : (
+          <div className="card">
+            <div className="card-header">
+              <h5 className="card-title mb-10">Warehouse Inventory</h5>
+              <input type="text" placeholder="Search all columns..." value={table.getState().globalFilter ?? ''} onChange={e => table.setGlobalFilter(e.target.value)} className="form-control" />
+            </div>
+            <div className="card-body">
+              <div className="table-responsive">
+                <table className="table basic-border-table mb-0">
+                  <thead>
+                    {table.getHeaderGroups().map(hg => (
+                      <tr key={hg.id}>
+                        {hg.headers.map(h => (
+                          <th key={h.id} colSpan={h.colSpan} onClick={h.column.getToggleSortingHandler()} className="px-10 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer">
+                            {h.isPlaceholder ? null : (
+                              <div className="flex items-center">
+                                {h.column.columnDef.header}
+                                {{
+                                  asc: ' 🔼',
+                                  desc: ' 🔽'
+                                }[h.column.getIsSorted()] ?? null}
+                              </div>
+                            )}
+                          </th>
+                        ))}
+                      </tr>
+                    ))}
+                  </thead>
+                  <tbody>
+                    {table.getRowModel().rows.length === 0 ? (
+                      <tr>
+                        <td colSpan={columns.length} className="text-center py-4">
+                          No records found
+                        </td>
+                      </tr>
+                    ) : (
+                      table.getRowModel().rows.map(row => (
+                        <tr key={row.id}>
+                          {row.getVisibleCells().map(cell => (
+                            <td key={cell.id} className="px-10 py-6 whitespace-nowrap text-sm text-gray-900">
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+
+                </table>
+              </div>
+            </div>
+
+            {/* pagination controls (copied from previous style) */}
+            <div className='card-footer'>
+              <div className="d-flex justify-content-between gap-2 mt-4">
+                <div className="btn-group radius-8" role="group">
+                  <button type="button" className="btn btn-primary-600" onClick={() => table.setPageIndex(0)} disabled={!table.getCanPreviousPage()}><Icon icon="mage:caret-left-fill" /></button>
+                  <button type="button" className="btn btn-primary-400" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}><Icon icon="mage:caret-left" /></button>
+                  <button type="button" className="btn btn-primary-400" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}><Icon icon="mage:caret-right" /></button>
+                  <button type="button" className="btn btn-primary-600" onClick={() => table.setPageIndex(table.getPageCount() - 1)} disabled={!table.getCanNextPage()}><Icon icon="mage:caret-right-fill" /></button>
+                </div>
+                <span>Page <strong>{table.getState().pagination.pageIndex + 1} of {table.getPageCount()}</strong></span>
+                <div className="d-flex align-items-center gap-2">
+                  <span>Go to page:
+                    <input type="number" defaultValue={table.getState().pagination.pageIndex + 1} onChange={e => table.setPageIndex(e.target.value ? Number(e.target.value) - 1 : 0)} className="border p-1 rounded w-44-px" />
+                  </span>
+                  <select value={table.getState().pagination.pageSize} onChange={e => table.setPageSize(Number(e.target.value))} className="p-1 border rounded">
+                    {[10,20,30,40,50].map(s => <option key={s} value={s}>Show {s}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        
+        {/* ---------- Modal ---------- */}
+{modalOpen && (
+  <div style={{
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.45)",
+    zIndex: 9999,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center"
+  }}>
+    <div style={{
+      width: "90%",
+      maxWidth: 950,
+      background: "#fff",
+      borderRadius: 8,
+      padding: 20,
+      maxHeight: "85vh",
+      overflowY: "auto",
+      boxShadow: "0px 0px 15px rgba(0,0,0,0.2)"
+    }}>
+      {/* Header */}
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h4 className="m-0 text-xl">
+          <strong>Purchase History:</strong> {modalProductName}
+          {modalWarehouseName && (
+            <span className="text-muted text-xl" >
+              {" "} ({modalWarehouseName})
+            </span>
+          )}
+        </h4>
+        <button className="btn btn-sm btn-outline-danger" onClick={closeModal}>
+          ✕ Close
+        </button>
       </div>
+
+      {/* Body */}
+      {modalLoading ? (
+        <div className="text-center py-5">
+          <span className="spinner-border spinner-border-sm me-2"></span> Loading...
+        </div>
+      ) : modalRows.length === 0 ? (
+        <div className="text-center text-muted py-4">
+          No purchase records found for this product in this warehouse.
+        </div>
+      ) : (
+        modalRows.map(inv => (
+          <div key={inv._id} className="mb-3 p-3 border rounded" style={{ background: "#fafafa" }}>
+            {/* Invoice Header */}
+            <div className="d-flex justify-content-between mb-2">
+              <div>
+                <strong>Invoice:</strong> {inv.invoiceNo} <br />
+                <strong>Supplier:</strong> {inv.supplierName || "N/A"} <br />
+                <strong>Date:</strong> {inv.date ? new Date(inv.date).toLocaleDateString() : ""}
+              </div>
+
+              <div className="text-end">
+                <strong>GST:</strong> {formatDecimal3(inv.gst)} <br />
+                <strong>Total:</strong> {formatDecimal3(inv.total)}
+              </div>
+            </div>
+
+            {/* Product Table */}
+            <div className="table-responsive">
+              <table className="table table-bordered table-sm">
+                <thead className="table-light">
+                  <tr>
+                    <th style={{ width: "50%" }}>Product</th>
+                    <th className="text-center" style={{ width: "15%" }}>Qty</th>
+                    <th className="text-center" style={{ width: "15%" }}>Price</th>
+                    <th className="text-end" style={{ width: "20%" }}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inv.products.map((pr, idx) => (
+                    <tr key={idx}>
+                      <td>{pr.label || modalProductName}</td>
+                      <td className="text-center">{pr.quantity}</td>
+                      <td className="text-center">{formatDecimal3(pr.price)}</td>
+                      <td className="text-end">
+                        {Number(pr.lineTotal).toLocaleString(undefined, {
+                          minimumFractionDigits: 3,
+                          maximumFractionDigits: 3
+                        })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))
+      )}
     </div>
+  </div>
+)}
+
+      </div>
+    </MasterLayout>
   );
 }
-
-
-export default WarehouseInventoryPage;
