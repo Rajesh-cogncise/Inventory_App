@@ -196,7 +196,7 @@ export default function StockPurchasedPage() {
             <table className="table basic-border-table mb-0">
               <thead>
                 <tr>
-                  <th>Sr.No</th>
+                  <th className="text-center">Sr.No</th>
                   <th>Date</th>
                   <th>Invoice No</th>
                   <th>Supplier Name</th>
@@ -208,7 +208,7 @@ export default function StockPurchasedPage() {
               <tbody>
                 {purchases.map((purchase, idx) => (
                   <tr key={purchase._id || idx}>
-                    <td>{idx + 1}</td>
+                    <td className="text-center">{idx + 1}</td>
                     <td>{purchase.date ? new Date(purchase.date).toLocaleDateString() : ""}</td>
                     <td>{purchase.invoiceNo}</td>
                     <td>{purchase.supplier?.name || ""}</td>
@@ -263,7 +263,7 @@ export default function StockPurchasedPage() {
                       <table className="table table-sm table-bordered">
                         <thead>
                           <tr>
-                            <th >Sr.No</th>
+                            <th className="text-center" >Sr.No</th>
                             <th>Product</th>
                             <th>Quantity</th>
                             <th>Price / unit</th>
