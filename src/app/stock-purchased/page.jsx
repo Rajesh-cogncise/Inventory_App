@@ -131,7 +131,7 @@ export default function StockPurchasedPage() {
 
         {/* FILTER BAR */}
         <div className="card p-3 mb-3">
-          <h6 className="mb-3">Search Filters</h6>
+          <h6 className="mb-3">Stock Purchased Search Filters</h6>
           <div className="row g-3 align-items-end">
             <div className="col-md-3">
               <label className="form-label">Warehouse</label>
@@ -296,7 +296,7 @@ export default function StockPurchasedPage() {
                     <div className="d-flex justify-content-end gap-3 mt-3">
                       <div className="text-right">
                         <div><strong>Subtotal:</strong> ${formatDecimal(activePurchase.subtotal)}</div>
-                        <div><strong>GST:</strong> ${formatDecimal(activePurchase.gst ?? 0, 3)}</div>
+                        <div><strong>GST ({activePurchase.gstpercent}%):</strong> ${formatDecimal(activePurchase.gst ?? 0, 3)}</div>
                         <div><strong>Grand Total:</strong> ${formatDecimal(activePurchase.total)}</div>
                       </div>
                     </div>

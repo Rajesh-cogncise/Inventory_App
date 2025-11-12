@@ -108,7 +108,7 @@ export default function SuppliersPage() {
               ))}
             </select>
           </div>*/}
-          <div className="col-12 mb-20">
+          <div className="col-2 mb-20">
             <button type="submit" className="btn btn-success">{editingId ? "Update Supplier" : "Create Supplier"}</button>
             {editingId && <button type="button" className="btn btn-secondary ms-2" onClick={() => { setEditingId(null); setForm(initialSupplier); }}>Cancel</button>}
           </div>

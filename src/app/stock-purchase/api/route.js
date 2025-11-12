@@ -52,6 +52,8 @@ export async function GET(req) {
 export async function POST(req) {
   await dbConnect();
   const body = await req.json();
+
+  
   console.log('Received stock purchase:', body);
   const session = await getServerSession(authOptions);
   if (!session) {
@@ -63,6 +65,12 @@ export async function POST(req) {
    // Convert incoming date string to Date object before saving
   const istDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
   body.date = new Date(istDate);
+
+  if (!body.gstpercent || isNaN(body.gstpercent)) {
+    body.gstpercent = 10;
+  } else {
+    body.gstpercent = Number(body.gstpercent); // ensure numeric
+  }
   try { 
     
     for (const product of body.products) {

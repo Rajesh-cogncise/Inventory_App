@@ -205,7 +205,7 @@ export default function WarehouseInventoryPage() {
                     {table.getHeaderGroups().map(hg => (
                       <tr key={hg.id}>
                         {hg.headers.map(h => (
-                          <th key={h.id} colSpan={h.colSpan} onClick={h.column.getToggleSortingHandler()} className="px-10 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer">
+                          <th key={h.id} colSpan={h.colSpan} onClick={h.column.getToggleSortingHandler()} className="px-10 py-3 text-left text-md  font-medium text-gray-500 uppercase tracking-wider cursor-pointer">
                             {h.isPlaceholder ? null : (
                               <div className="flex items-center">
                                 {h.column.columnDef.header}

@@ -224,7 +224,7 @@ export default function StockTransfersPage() {
             <input type="text" name="reason" className="form-control" value={form.reason} onChange={handleChange} placeholder="Optional" />
           </div>
 
-          <div className="col-md-12 d-flex gap-2 mt-2">
+          <div className="col-md-12 d-flex gap-2 mt-2 pt-3 pb-3">
             <button type="submit" className="btn btn-success" disabled={submitLoading}>
               {submitLoading ? "Transferring..." : "Transfer"}
             </button>
@@ -253,13 +253,14 @@ export default function StockTransfersPage() {
               <table className="table basic-border-table mb-0">
                 <thead>
                   <tr>
-                    <th>Sr.</th>
+                    <th>Sr.No</th>
                     <th>Date</th>
                     <th>Product</th>
                     <th>Qty</th>
-                    <th>From</th>
-                    <th>To</th>
+                    <th>Transferred From</th>
+                    <th>Transferred To</th>
                     <th>Reason</th>
+                    <th>Transferred By</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -269,13 +270,14 @@ export default function StockTransfersPage() {
                     </tr>
                   ) : visibleTransfers.map((t, i) => (
                     <tr key={t._id || i}>
-                      <td>{pageIndex * pageSize + i + 1}</td>
+                      <td className="text-center">{pageIndex * pageSize + i + 1}</td>
                       <td>{t.createdAt ? new Date(t.createdAt).toLocaleString() : ""}</td>
                       <td>{t.productLabel || t.productId?.name || (t.productId?._id ? t.productId._id : "")}</td>
-                      <td>{t.quantity}</td>
+                      <td className="text-center">{t.quantity}</td>
                       <td>{t.fromWarehouseId?.name ?? "N/A"}</td>
                       <td>{t.toWarehouseId?.name ?? "N/A"}</td>
                       <td>{t.reason || ""}</td>
+                      <td>{t.userId?.name || "N/A"}</td> 
                     </tr>
                   ))}
                 </tbody>

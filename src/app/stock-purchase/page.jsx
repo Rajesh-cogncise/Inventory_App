@@ -15,6 +15,7 @@ export default function StockTransfersPage() {
     total: 0,
     warehouseId: '',
     supplier: '',
+    gstpercent: 10,
   });
   const [loading, setLoading] = useState(false);
   const [warehouseOptions, setWarehouseOptions] = useState([]);
@@ -58,6 +59,7 @@ export default function StockTransfersPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
+
     try {
       const res = await fetch('/stock-purchase/api', {
         method: 'POST',
@@ -77,6 +79,7 @@ export default function StockTransfersPage() {
         total: 0,
         supplier: '',
         warehouseId: '',
+        gstpercent: 10,
       });
     } catch (err) {
       setError(err.message);
@@ -142,6 +145,7 @@ export default function StockTransfersPage() {
       <Breadcrumb title='Stock Purchase' />
       <div className="container py-4">
         {error && <div className="alert alert-danger mb-3">{error}</div>}
+        <h6 className="mb-3">Stock Purchase</h6>
         <form className="flex flex-column g-3 mb-4" onSubmit={handleSubmit}>
           <div className="mb-3">
             <label className="form-label">Date</label>
@@ -288,6 +292,7 @@ export default function StockTransfersPage() {
           <div className=" d-flex gap-4 mt-5 mb-3">
             <label className="form-label fw-bold text-md">Subtotal : ${form.subtotal}</label>
             <input type="hidden" className="form-control" value={form.subtotal} readOnly />
+            <input type="hidden" name="gstpercent" value={form.gstpercent} readOnly />
             <br/>
             <label className="form-label fw-bold text-md">GST (10%): ${form.gst}</label>
             <input type="hidden" className="form-control" value={form.gst} readOnly />
