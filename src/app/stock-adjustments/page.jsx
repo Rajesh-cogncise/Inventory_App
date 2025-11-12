@@ -158,7 +158,7 @@ export default function StockAdjustmentsPage() {
           </div>
         ) : (
           <div className="table-responsive">
-            <table className="table table-bordered align-middle">
+            <table className="table basic-border-table mb-0 align-middle">
               <thead>
                 <tr>
                   <th className="text-center">Sr.No</th>
@@ -175,7 +175,7 @@ export default function StockAdjustmentsPage() {
                 {purchases.length > 0 ? (
                   purchases.map((p, i) => (
                     <tr key={p._id}>
-                      <td className="text-center">{(page - 1) * 5 + (i + 1)}</td>
+                      <td className="text-center">{(page - 1) * 10 + (i + 1)}</td>
                       <td>{new Date(p.date).toLocaleDateString()}</td>
                       <td>{p.invoiceNo}</td>
                       <td>{p.warehouseId?.name}</td>
