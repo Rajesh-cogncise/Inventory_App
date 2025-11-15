@@ -9,6 +9,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { NextResponse } from "next/server";
 
 // 🟢 GET: Fetch all stock adjustments / purchases with filters
+
 export async function GET(req) {
   await dbConnect();
   const { searchParams } = new URL(req.url);
@@ -43,7 +44,7 @@ export async function GET(req) {
       .populate("supplier", "name")
       .lean();
 
-    // 🟡 FIX: Convert Decimal128 → normal number
+    // Normalize Decimal128 → Number
     purchases.forEach((p) => {
       if (p.total) p.total = parseFloat(p.total.toString());
       if (p.subtotal) p.subtotal = parseFloat(p.subtotal.toString());
@@ -56,14 +57,20 @@ export async function GET(req) {
 
     const purchaseIds = purchases.map((p) => p._id);
 
+    // Load StockTransfer
     const { default: StockTransfer } = await import("@/models/StockTransfer.js");
 
+    // Fetch ONLY transfers linked to these purchases
     const transfers = await StockTransfer.find({
       purchaseId: { $in: purchaseIds },
     }).lean();
 
-    const transferredIds = new Set(transfers.map((t) => t.purchaseId.toString()));
+    // Create quick lookup set
+    const transferredIds = new Set(
+      transfers.map((t) => t.purchaseId.toString())
+    );
 
+    // ==== LAST ADJUSTMENT LOOKUP ====
     const adjustments = await StockAdjustment.aggregate([
       { $match: { purchaseId: { $in: purchaseIds } } },
       { $sort: { createdAt: -1 } },
@@ -80,6 +87,7 @@ export async function GET(req) {
       adjustmentMap[adj._id.toString()] = adj.lastUserId?.toString() || null;
     });
 
+    // Apply flags
     purchases.forEach((p) => {
       p.isTransferred = transferredIds.has(p._id.toString());
       p.lastAdjustedById = adjustmentMap[p._id.toString()] || null;
@@ -96,6 +104,7 @@ export async function GET(req) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
 
 
 
@@ -253,6 +262,7 @@ export async function GET(req) {
 
 // 🟡 POST: Update stock purchase + sync warehouse inventory properly
 // POST: Update purchase & sync warehouse inventories properly
+
 export async function POST(req) {
   try {
     await dbConnect();
@@ -274,17 +284,16 @@ export async function POST(req) {
     });
 
     // -------------------------------
-    // 1️⃣ Subtract old quantities from old warehouse (only this purchase)
+    // 1️⃣ Subtract old quantities from old warehouse
     if (oldWarehouseId) {
       const oldWarehouseInv = await WarehouseInventory.findOne({ warehouseId: oldWarehouseId });
       if (oldWarehouseInv) {
         for (const p of purchase.products) {
           const idx = oldWarehouseInv.products.findIndex(x => x.productId.toString() === p.productId.toString());
           if (idx > -1) {
-            // subtract old purchase quantity
             oldWarehouseInv.products[idx].quantity -= oldProductMap[p.productId.toString()] || 0;
             if (oldWarehouseInv.products[idx].quantity <= 0) {
-              oldWarehouseInv.products.splice(idx, 1); // remove if zero or negative
+              oldWarehouseInv.products.splice(idx, 1);
             }
           }
         }
@@ -298,7 +307,6 @@ export async function POST(req) {
     // 2️⃣ Update purchase record
     Object.assign(purchase, purchaseFields);
 
-    // Update/insert products
     const updatedProducts = [];
     products.forEach(p => {
       const idx = purchase.products.findIndex(x => x.productId.toString() === p.productId.toString());
@@ -317,12 +325,10 @@ export async function POST(req) {
       updatedProducts.push({ productId: p.productId, quantity: qty, price, label });
     });
 
-    // Remove deleted products
     if (removedProducts?.length) {
       purchase.products = purchase.products.filter(p => !removedProducts.includes(p.productId.toString()));
     }
 
-    // Recalculate totals
     const subtotal = purchase.products.reduce((sum, p) => sum + p.quantity * p.price, 0);
     const gstPercent = Number(purchase.gstpercent ?? 0);
     const gst = (subtotal * gstPercent) / 100;
@@ -333,25 +339,44 @@ export async function POST(req) {
     await purchase.save();
 
     // -------------------------------
-    // Update new warehouse inventory (merge duplicates)
+    // 3️⃣ Create Stock Adjustment Entry (MISSING BEFORE)
+    const adjustmentProducts = [];
+
+    for (const p of products) {
+      adjustmentProducts.push({
+        productId: p.productId,
+        oldQuantity: oldProductMap[p.productId.toString()] ?? 0,
+        newQuantity: Number(p.newQuantity ?? p.quantity),
+        difference: Number(p.newQuantity ?? p.quantity) - (oldProductMap[p.productId.toString()] ?? 0),
+      });
+    }
+
+    await StockAdjustment.create({
+      purchaseId,
+      warehouseId: newWarehouseId,
+      products: adjustmentProducts,
+      userId: session.user.id,
+      date: new Date(),
+    });
+
+    // -------------------------------
+    // 4️⃣ Update new warehouse inventory
     let newWarehouseInv = await WarehouseInventory.findOne({ warehouseId: newWarehouseId });
-    if (!newWarehouseInv) newWarehouseInv = new WarehouseInventory({ warehouseId: newWarehouseId, products: [], currentStock: 0 });
+    if (!newWarehouseInv)
+      newWarehouseInv = new WarehouseInventory({ warehouseId: newWarehouseId, products: [], currentStock: 0 });
 
     // Merge products by productId
     for (const p of updatedProducts) {
       const idx = newWarehouseInv.products.findIndex(x => x.productId.toString() === p.productId.toString());
       if (idx > -1) {
-        // If product exists, increment quantity
         newWarehouseInv.products[idx].quantity += p.quantity;
-        newWarehouseInv.products[idx].price = p.price; // optional: update price
+        newWarehouseInv.products[idx].price = p.price;
         if (p.label) newWarehouseInv.products[idx].label = p.label;
       } else {
-        // Add new product
         newWarehouseInv.products.push({ ...p });
       }
     }
 
-    // Ensure no duplicates exist (just in case)
     const mergedProducts = [];
     const seen = new Set();
     for (const p of newWarehouseInv.products) {
@@ -360,14 +385,12 @@ export async function POST(req) {
         mergedProducts.push(p);
         seen.add(pid);
       } else {
-        // If duplicate somehow exists, merge quantity
         const existing = mergedProducts.find(mp => mp.productId.toString() === pid);
         existing.quantity += p.quantity;
       }
     }
     newWarehouseInv.products = mergedProducts;
 
-    // Recalculate current stock
     newWarehouseInv.currentStock = newWarehouseInv.products.reduce((sum, p) => sum + p.quantity, 0);
     newWarehouseInv.lastUpdated = new Date();
     await newWarehouseInv.save();
