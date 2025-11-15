@@ -61,36 +61,76 @@ export default function StockTransfersPage() {
       setWarehouses([]);
     }
   }
+async function loadProductsForWarehouse(warehouseId) {
+  setLoadingProducts(true);
+  setProductsForFromWarehouse([]);
 
-  async function loadProductsForWarehouse(warehouseId) {
-    setLoadingProducts(true);
-    setProductsForFromWarehouse([]);
-    try {
-      // use your existing warehouse-inventory API
-      const res = await fetch(`/warehouse-inventory/api?warehouseId=${warehouseId}`);
-      const data = await res.json();
-      if (!res.ok) {
-        setProductsForFromWarehouse([]);
-      } else {
-        // 'data' is an array of WarehouseInventory records (should be length 1 for that warehouse)
-        // flatten products
-        const flattened = (Array.isArray(data) ? data : []).flatMap(record => {
-          const products = Array.isArray(record.products) ? record.products : [];
-          return products.map(p => ({
-            value: p.productId?._id || p.productId,
-            label: p.productId?.name || p.label || "Unnamed",
-            available: Number(p.quantity || 0),
-            raw: p
-          }));
-        });
-        setProductsForFromWarehouse(flattened);
-      }
-    } catch (err) {
+  try {
+    if (!warehouseId) {
       setProductsForFromWarehouse([]);
-    } finally {
-      setLoadingProducts(false);
+      return;
     }
+
+    const res = await fetch(`/warehouse-inventory/api?warehouseId=${warehouseId}`);
+    const data = await res.json();
+
+    console.log("WAREHOUSE INVENTORY:", data); // ← IMPORTANT
+
+    const map = new Map();
+
+    for (const record of data) {
+      
+      // ========== CASE A: already grouped by product ==========
+      if (record?.productId && record?.totalQuantity != null) {
+        const p = record.productId;
+        const id = String(p._id);
+        const name = p.name || p.label || id;
+        const qty = Number(record.totalQuantity);
+
+        map.set(id, { value: id, label: name, available: qty });
+        continue;
+      }
+
+      // ========== CASE B: raw WarehouseInventory with products[] ==========
+      if (Array.isArray(record?.products)) {
+        for (const item of record.products) {
+          const p = item.productId;
+          if (!p) continue;
+
+          const id = String(p._id);
+          const name = p.name || item.label || id;
+          const qty = Number(item.quantity);
+
+          if (!map.has(id)) {
+            map.set(id, { value: id, label: name, available: qty });
+          } else {
+            map.get(id).available += qty;
+          }
+        }
+        continue;
+      }
+
+      // ========== CASE C: fallback - unexpected structure ==========
+      console.warn("Unhandled inventory record:", record);
+    }
+
+    const final = Array.from(map.values()).sort((a, b) =>
+      a.label.localeCompare(b.label)
+    );
+
+    console.log("PARSED INVENTORY PRODUCTS:", final);
+
+    setProductsForFromWarehouse(final);
+
+  } catch (err) {
+    console.error("Error loading products:", err);
+    setProductsForFromWarehouse([]);
+  } finally {
+    setLoadingProducts(false);
   }
+}
+
+
 
   async function loadTransfers() {
     try {

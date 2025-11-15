@@ -57,7 +57,7 @@ export default function WarehouseInventoryPage() {
       if (selectedWarehouse) params.append("warehouseId", selectedWarehouse);
       if (fromDate) params.append("fromDate", fromDate);
       if (toDate) params.append("toDate", toDate);
-      const url = params.toString() ? `/warehouse-inventory/api?${params.toString()}` : `/warehouse-inventory/api`;
+      const url = params.toString() ? `/warehouse-inventory/api/warehouse-inventory?${params.toString()}` : `/warehouse-inventory/api`;
       const res = await fetch(url);
       const data = await res.json();
       if (!res.ok) {
@@ -75,26 +75,126 @@ export default function WarehouseInventoryPage() {
   }
 
   // Flat rows (one row per product)
-  const flattenedData = useMemo(() => {
-    if (!Array.isArray(inventory)) return [];
-    return inventory.flatMap(record => {
-      const warehouseName = record?.warehouseId?.name ?? "N/A";
-      const warehouseId = record?.warehouseId?._id ?? record?.warehouseId;
-      const products = Array.isArray(record?.products) ? record.products : [];
+  // Replace your flattenedData useMemo with this robust version
+const flattenedData = useMemo(() => {
+  if (!Array.isArray(inventory) || inventory.length === 0) return [];
 
-      return products.map(p => ({
-        _inventoryId: record?._id,
-        warehouseId,
-        warehouse: warehouseName,
-        productName: p?.productId?.name ?? p?.label ?? "N/A",
-        productLabel: p?.label ?? "",
-        productId: p?.productId?._id ?? p?.productId,
-        type: p?.productId?.type || "N/A",
-        quantity: p?.quantity ?? 0,
-        
-      }));
-    });
-  }, [inventory]);
+  const merged = {};
+
+  for (const record of inventory) {
+    // Possible warehouse id/name locations
+    const warehouseObj = record?.warehouseId;
+    const warehouseId = warehouseObj?._id ?? warehouseObj ?? record?.warehouseId ?? "unknown";
+    const warehouseName = (warehouseObj && (warehouseObj.name || warehouseObj.label)) || record?.warehouse || "N/A";
+
+    // CASE A: record has products[] array (your canonical schema)
+    if (Array.isArray(record.products) && record.products.length > 0) {
+      for (const p of record.products) {
+        // productId might be nested object or string
+        const prodObj = p?.productId;
+        const productId = prodObj?._id ?? prodObj ?? String(p?.productId ?? "");
+        if (!productId) continue;
+
+        const key = `${warehouseId}_${productId}`;
+
+        const productName =
+          (prodObj && (prodObj.name || prodObj.label)) ||
+          p?.label ||
+          p?.name ||
+          "N/A";
+
+        const qty = Number(p?.quantity ?? 0);
+
+        if (!merged[key]) {
+          merged[key] = {
+            _inventoryId: record?._id,
+            warehouseId,
+            warehouse: warehouseName,
+            productId,
+            productName,
+            productLabel: p?.label ?? "",
+            type: (prodObj && prodObj.type) || p?.type || "N/A",
+            quantity: qty,
+          };
+        } else {
+          merged[key].quantity += qty;
+        }
+      }
+
+      continue; // move to next record
+    }
+
+    // CASE B: record itself is already a grouped inventory item
+    // e.g. { productId: {...} , totalQuantity: X } or { productId: id, quantity: X }
+    const maybeProdObj = record?.productId;
+    const maybeProductId = maybeProdObj?._id ?? maybeProdObj ?? record?.productId ?? null;
+
+    if (maybeProductId) {
+      const productId = String(maybeProductId);
+      const key = `${warehouseId}_${productId}`;
+
+      const productName =
+        (maybeProdObj && (maybeProdObj.name || maybeProdObj.label)) ||
+        record?.productName ||
+        record?.productLabel ||
+        "N/A";
+
+      // prefer explicit totals, fall back to quantity or currentStock
+      const qty =
+        Number(record?.totalQuantity ?? record?.quantity ?? record?.currentStock ?? 0);
+
+      if (!merged[key]) {
+        merged[key] = {
+          _inventoryId: record?._id,
+          warehouseId,
+          warehouse: warehouseName,
+          productId,
+          productName,
+          productLabel: record?.productLabel ?? "",
+          type: (maybeProdObj && maybeProdObj.type) || record?.type || "N/A",
+          quantity: qty,
+        };
+      } else {
+        merged[key].quantity += qty;
+      }
+
+      continue;
+    }
+
+    // CASE C: defensive - sometimes record.products missing but record contains nested product info under different names
+    // attempt to find any plausible product-like fields
+    if (record?.products === undefined && (record?.product || record?.items)) {
+      const arr = record.product ? [record.product] : record.items;
+      if (Array.isArray(arr)) {
+        for (const p of arr) {
+          const productId = p?.productId?._id ?? p?.productId ?? p?._id ?? p?.id;
+          if (!productId) continue;
+          const key = `${warehouseId}_${productId}`;
+          const productName = p?.label || p?.name || "N/A";
+          const qty = Number(p?.quantity ?? 0);
+          if (!merged[key]) {
+            merged[key] = {
+              _inventoryId: record?._id,
+              warehouseId,
+              warehouse: warehouseName,
+              productId,
+              productName,
+              productLabel: p?.label ?? "",
+              type: p?.type ?? "N/A",
+              quantity: qty,
+            };
+          } else {
+            merged[key].quantity += qty;
+          }
+        }
+      }
+    }
+  }
+
+  // Return as array consumed by your table (same shape as before)
+  return Object.values(merged);
+}, [inventory]);
+
 
   const totalQuantity = flattenedData.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
 
@@ -231,7 +331,7 @@ export default function WarehouseInventoryPage() {
                       table.getRowModel().rows.map(row => (
                         <tr key={row.id}>
                           {row.getVisibleCells().map(cell => (
-                            <td key={cell.id} className="px-10 py-6 whitespace-nowrap text-sm text-gray-900">
+                            <td key={cell.id} className="px-10 py-6 whitespace-nowrap text-sm text-gray-900 text-capitalize">
                               {flexRender(cell.column.columnDef.cell, cell.getContext())}
                             </td>
                           ))}
